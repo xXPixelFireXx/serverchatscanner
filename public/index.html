@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Web Chat Bridge</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #1e1e1e; color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 90vh; }
+        h2 { margin-top: 0; }
+        .panel { background: #2d2d2d; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        input, button { padding: 8px 12px; border-radius: 4px; border: 1px solid #444; background: #3c3c3c; color: #fff; }
+        input:disabled, button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button { background: #4CAF50; cursor: pointer; border: none; font-weight: bold; }
+        button.disconnect { background: #f44336; }
+        #chat-box { flex: 1; background: #121212; border: 1px solid #333; border-radius: 8px; padding: 10px; overflow-y: auto; font-family: monospace; margin-bottom: 15px; display: flex; flex-direction: column; gap: 5px; }
+        .message { word-break: break-all; }
+        .message span.sender { font-weight: bold; color: #4CAF50; }
+        .message span.System { color: #ff9800; }
+        .message span.Server { color: #00bcd4; }
+        .input-group { display: flex; gap: 10px; }
+        .input-group input { flex: 1; }
+    </style>
+</head>
+<body>
+
+    <h2>Minecraft Chat Bridge (Steve Bot)</h2>
+    
+    <div class="panel">
+        <div>
+            <label>Username:</label>
+            <input type="text" id="username" value="SteveBot">
+        </div>
+        <div>
+            <label>Server IP / Host:</label>
+            <input type="text" id="host" placeholder="e.g., play.example.com">
+        </div>
+        <div>
+            <label>Port:</label>
+            <input type="number" id="port" value="25565" style="width: 80px;">
+        </div>
+        <button id="connect-btn" onclick="toggleConnection()">Connect</button>
+    </div>
+
+    <div id="chat-box"></div>
+
+    <div class="input-group">
+        <input type="text" id="chat-input" placeholder="Type a message to send to the server..." disabled onkeydown="if(event.key==='Enter') sendMessage()">
+        <button id="send-btn" onclick="sendMessage()" disabled>Send</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        const usernameInput = document.getElementById('username');
+        const hostInput = document.getElementById('host');
+        const portInput = document.getElementById('port');
+        const connectBtn = document.getElementById('connect-btn');
+        const chatBox = document.getElementById('chat-box');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        let isConnected = false;
+
+        socket.on('status', (state) => {
+            isConnected = state.connected;
+            usernameInput.disabled = isConnected;
+            hostInput.disabled = isConnected;
+            portInput.disabled = isConnected;
+            
+            if (isConnected) {
+                connectBtn.textContent = 'Disconnect';
+                connectBtn.className = 'disconnect';
+                chatInput.disabled = false;
+                sendBtn.disabled = false;
+            } else {
+                connectBtn.textContent = 'Connect';
+                connectBtn.className = '';
+                chatInput.disabled = true;
+                sendBtn.disabled = true;
+            }
+        });
+
+        socket.on('chat-message', (data) => {
+            const div = document.createElement('div');
+            div.className = 'message';
+            
+            let senderClass = data.sender;
+            if (data.sender !== 'System' && data.sender !== 'Server') {
+                senderClass = 'sender';
+            }
+
+            div.innerHTML = `<span class="${senderClass}">[${data.sender}]</span> ${escapeHtml(data.message)}`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        });
+
+        function toggleConnection() {
+            if (!isConnected) {
+                const username = usernameInput.value.trim();
+                const host = hostInput.value.trim();
+                const port = portInput.value.trim();
+                socket.emit('connect-server', { username, host, port });
+            } else {
+                socket.emit('disconnect-server');
+            }
+        }
+
+        function sendMessage() {
+            const text = chatInput.value.trim();
+            if (text && isConnected) {
+                socket.emit('send-chat', text);
+                chatInput.value = '';
+            }
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
